@@ -27,20 +27,48 @@
 // if (out < 0) set ng = 1
 
 CHIP ALU {
-    IN  
-        x[16], y[16],  // 16-bit inputs        
-        zx, // zero the x input?
-        nx, // negate the x input?
-        zy, // zero the y input?
-        ny, // negate the y input?
-        f,  // compute out = x + y (if 1) or x & y (if 0)
-        no; // negate the out output?
+	IN
+		x[16], y[16],  // 16-bit inputs        
+		zx, // zero the x input?
+		nx, // negate the x input?
+		zy, // zero the y input?
+		ny, // negate the y input?
+		f,  // compute out = x + y (if 1) or x & y (if 0)
+		no; // negate the out output?
 
-    OUT 
-        out[16], // 16-bit output
-        zr, // 1 if (out == 0), 0 otherwise
-        ng; // 1 if (out < 0),  0 otherwise
+	OUT 
+		out[16], // 16-bit output
+		zr, // 1 if (out == 0), 0 otherwise
+		ng; // 1 if (out < 0),  0 otherwise
 
-    PARTS:
-   // Put you code here:
+	PARTS:
+		// zx: (if zx then x = 0)
+		Mux16(a=x, b=false, sel=zx, out=zxout);
+		// nx: (if nx then x = !x)
+		Not16(in=zxout, out=notx);
+		Mux16(a=zxout, b=notx, sel=nx, out=nxout);
+		// zy: (if zy then y = 0)
+		Mux16(a=y, b=false, sel=zy, out=zyout);
+		// ny: (if ny then y = !y)
+		Not16(in=zyout, out=noty);
+		Mux16(a=zyout, b=noty, sel=ny, out=nyout);
+		// f: compute out = x + y (if 1) or x & y (if 0)
+		Add16(a=nxout, b=nyout, out=addxy);
+		And16(a=nxout, b=nyout, out=andxy);
+		Mux16(a=andxy, b=addxy, sel=f, out=fout);
+		// no: if no then out = !out
+		Not16(in=fout, out=notfout);
+		// calculate final result, but redirect a full 16-bit copy and two 8-bit buses to use below
+		Mux16(a=fout, b=notfout, sel=no, out=out, out=final, out[0..7]=outpin0to7, out[8..15]=outpin8to15);
+
+		// calculate zr
+		Or8Way(in=outpin0to7, out=or0to7);
+		Or8Way(in=outpin8to15, out=or8to15);
+		Or(a=or0to7, b=or8to15, out=zrneg);
+		Not(in=zrneg, out=zr);
+
+		// calculate ng
+		// out is negative if bit 15 is 1
+		And16(a=final, b[15]=true, b[0..14]=false, out[15]=ng);
+
 }

@@ -13,6 +13,9 @@ CHIP FullAdder {
 	    carry;   // Left bit of a + b + c
 
 	PARTS:
+
+/* 
+	// working solution:
 	// calculate sum
 	Xor(a=b, b=c, out=xorbc);
 	Not(in=xorbc, out=notxorbc);
@@ -23,10 +26,15 @@ CHIP FullAdder {
 	And(a=c, b=a, out=andca);
 	Or(a=andcb, b=andba, out=orout);
 	Or(a=orout, b=andca, out=carry);
+*/
 
-// it's possible to write this using two half-adders
-// "with some glue in the middle..."
-
-
+	// trying a shorter solution using halfadders (and some glue):
+	HalfAdder(a=c, b=b, sum=halfsum, carry=halfcarry);
+	// calculate sum
+	HalfAdder(a=a, b=halfsum, sum=sum, carry=trashcarry);
+	// calculate carry
+	Or(a=halfsum, b=halfcarry, out=orsuca);
+	Mux(a=halfcarry, b=orsuca, sel=a, out=carry);
+	
 }
 
