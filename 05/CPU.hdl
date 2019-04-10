@@ -39,8 +39,29 @@ CHIP CPU {
 		pc[15];          // address of next instruction
 
 	PARTS:
-		// select ALU output or A-instruction
+
+		// instruction bits: ixxaccccccdddjjj
+
+		// select ALU output or A-instruction, use controlbit 15 (i)
 		Mux16(a=ALUoutput, b=instruction, sel=instruction[15], out=aRegInput);
-		ARegister(in=aRegInput, load=, out=aRegOutput);
+		ARegister(in=aRegInput, load=???, out=aRegOutput, out=addressM);
 		
+		// Mux A-register or M input, use control bit 12 (a)
+		Mux16(a=aRegOutput, b=inM, sel=instruction[12], out=ALUyInput);
+
+		// what is the load bit here?
+		DRegister(in=ALUoutput, load=???, out=ALUxInput);
+
+		// the ALU needs 6 controlbits as input
+		ALU( x =ALUxInput, y =ALUyInput, 
+			zx=instruction[6], nx=instruction[7], zy=instruction[8], ny=instruction[9], f =instruction[10], no=instruction[11], 
+			out=ALUoutput, 
+			zr=zrOut, ng=ngOut);
+
+		// Or all 3 jump-bits to see if there is a jump condition
+		Or(a=instruction[0], b=instruction[1], out=OrJumpBits0And1);
+		Or(a=OrJumpBits0And1, b=instruction[2], out=jumpFlag);
+		// if jumpFlag is true – load address, otherwise increment ++
+		PC(in=aRegOutput, load=jumpFlag, inc=true, reset=reset, out=pc);
+
 }
