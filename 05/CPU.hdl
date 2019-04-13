@@ -40,35 +40,149 @@ CHIP CPU {
 
 	PARTS:
 
-		// instruction bits: ixxaccccccdddjjj
+		// instruction:
+		
+		// ixxaccccccdddjjj
+		// select ALU output or A-instruction, use op-codd 15
+		// If it's an A-instruction, this  consists of 1 op-code bit and a 15-bit value
+		// 0 = A-instruction
+		// 1 = C-instruction / ALU output
+		Mux16(a=instruction, b=ALUoutput, sel=instruction[15], out=aRegInput);
+		
+		
 
-		// select ALU output or A-instruction, use controlbit 15 (i)
-		Mux16(a=ALUoutput, b=instruction, sel=instruction[15], out=aRegInput);
-		ARegister(in=aRegInput, load=instruction[15], out=aRegOutput, out[0..14]=addressM);
+
+		// DESTINATION CONTROL:
 
 
-		// whenever there is a C-instruction 
-		// and d2 (bit 4) is a 1 the D register is loaded
+		// A register:
+
+		// load A-Register on two conditions,
+		// 1. if it's an A-Instruction – instruction[15] = 0
+		// 2. if it's a C-Instruction and destination bit 5 is set to 1
+		And(a=instruction[15], b=instruction[5], out=destA);
+		Not(in=instruction[15], out=isAInstr);
+		Or(a=destA, b=isAInstr, out=loadARegister);
+		ARegister(in=aRegInput, load=loadARegister, out=aRegOutput, out[0..14]=addressM);
+
+
+		// D register:
+		
+		// bit 4
+		// "whenever there is a C-instruction 
+		// and d2 (bit 4) is a 1 the D register is loaded"
+		// also see destination bits in video 4.4 at 06:30
 		And(a=instruction[4], b=instruction[15], out=loadDRegisterFlag);
-		// what is the load bit here?
 		DRegister(in=ALUoutput, load=loadDRegisterFlag, out=ALUxInput);
+
+		// writeM:
+
+		// write to RAM[A]
+		// if a C-instruction (bit 15)
+		// and if bit 3 is set
+		// see video 4.4 at 06:30 about destination bits
+		And(a=instruction[3], b=instruction[15], out=writeM);
+
+
+
+
+
+
+
+		// JUMP LOGIC:
+
+		// zrOut, true if result is zero
+		// ngOut, true if result is negative
+
+		// JGT
+		Or(a=instruction[2], b=instruction[1], out=ORInst21);
+		Not(in=ORInst21, out=NORInst21);
+		And(a=NORInst21, b=instruction[0], out=JGTtemp);
+		Or(a=zrOut, b=ngOut, out=ORzrng);
+		Not(in=ORzrng, out=NORzrng);
+		And(a=JGTtemp, b=NORzrng, out=JGT);
+
+		// JEQ, Jump if Equal to 0
+		Or(a=instruction[2], b=instruction[0], out=ORInst20);
+		Not(in=ORInst20, out=NORInst20);
+		And(a=NORInst20, b=instruction[1], out=JEQtemp);
+		And(a=JEQtemp, b=zrOut, out=JEQ);
+
+		// JGE
+		And(a=instruction[1], b=instruction[0], out=ANDInst10);
+		Not(in=instruction[2], out=NOTInst2);
+		And(a=ANDInst10, b=NOTInst2, out=JGEtemp);
+		Not(in=ngOut, out=NOTng);
+		And(a=JGEtemp, b=NOTng, out=JGE);
+
+		// JLT
+		Or(a=instruction[1], b=instruction[0], out=ORInst10);
+		Not(in=ORInst10, out=NORInst10);
+		And(a=NORInst10, b=instruction[2], out=JLTtemp);
+		And(a=JLTtemp, b=ngOut, out=JLT);
+
+		// JNE
+		And(a=instruction[2], b=instruction[0], out=ANDInst20);
+		Not(in=instruction[1], out=NOTInst1);
+		And(a=ANDInst20, b=NOTInst1, out=JNEtemp);
+		Not(in=zrOut, out=NOTzr);
+		And(a=JNEtemp, b=NOTzr, out=JNE);
+
+		// JLE, jump if less than or equal to 0
+		And(a=instruction[2], b=instruction[1], out=ANDInst21);
+		Not(in=instruction[0], out=NOTInst0);
+		And(a=ANDInst21, b=NOTInst0, out=JLEtemp);
+		Xor(a=zrOut, b=ngOut, out=XORZrNg);
+		And(a=JLEtemp, b=XORZrNg, out=JLE);
+
+		// JMP, if 1 then jump!
+		//And(a=instruction[1], b=instruction[0], out=ANDInst10);
+		And(a=ANDInst10, b=instruction[2], out=JMP);
+
+		// check for any jump condition:		
+		Or8Way(
+			in[0]=false, 
+			in[1]=JGT,
+			in[2]=JEQ,
+			in[3]=JGE,
+			in[4]=JLT,
+			in[5]=JNE,
+			in[6]=JLE,
+			in[7]=JMP, 
+			out=jumpFlag
+		);
+
+		// also we need to check if this is a C-instruction
+		And(a=jumpFlag, b=instruction[15], out=jumpOk);
+
+
+
+		// PC:
+
+		// if jumpFlag is true – load address, otherwise increment ++
+		PC(in=aRegOutput, load=jumpOk, inc=true, reset=reset, out[0..14]=pc);
+
+
+
+
+		// ALU:
 
 		// Mux A-register or M input, if C-instruction [15] use control bit 12 (a)
 		// aRegOutput if a = 1
-		// also set writeM
-		And(a=instruction[12], b=instruction[15], out=selectAOrM, out=writeM);
-		Mux16(a=inM, b=aRegOutput, sel=selectAOrM, out=ALUyInput);
+		And(a=instruction[12], b=instruction[15], out=selectAOrM);
+		Mux16(a=aRegOutput, b=inM, sel=selectAOrM, out=ALUyInput);
+		//Mux16(a=aRegOutput, b=inM, sel=instruction[12], out=ALUyInput);
 
-		// the ALU needs 6 controlbits as input
+		// the ALU needs 6 controlbits [6..11] as input
 		ALU( x=ALUxInput, y=ALUyInput, 
-			zx=instruction[6], nx=instruction[7], zy=instruction[8], ny=instruction[9], f =instruction[10], no=instruction[11], 
-			out=ALUoutput, 
+			zx=instruction[11], 
+			nx=instruction[10], 
+			zy=instruction[9], 
+			ny=instruction[8], 
+			f =instruction[7], 
+			no=instruction[6], 
+			out=ALUoutput, out=outM,
 			zr=zrOut, ng=ngOut);
 
-		// Or all 3 jump-bits to see if there is a jump condition
-		Or(a=instruction[0], b=instruction[1], out=OrJumpBits0And1);
-		Or(a=OrJumpBits0And1, b=instruction[2], out=jumpFlag);
-		// if jumpFlag is true – load address, otherwise increment ++
-		PC(in=aRegOutput, load=jumpFlag, inc=true, reset=reset, out[0..14]=pc);
 
 }
