@@ -23,9 +23,32 @@
  */
 
 CHIP Memory {
-    IN in[16], load, address[15];
-    OUT out[16];
+	IN in[16], load, address[15];
+	OUT out[16];
 
-    PARTS:
-    // Put your code here:
+	PARTS:
+	// if bit 14 is 0 then it's a RAM address
+	Not(in=address[14], out=isLow);
+	// if not 0 then it's SCREEN address
+	Not(in=isLow, out=isHigh);
+	// keyboard
+	And(a=address[14], b=address[13], out=isKey);
+	Not(in=isKey, out=notKey);
+
+	// check if load is set
+	And(a=load, b=isLow, out=setRam);
+	And(a=load, b=isHigh, out=setScreenTemp);
+	And(a=setScreenTemp, b=notKey, out=setScreen); // block if keyboard
+
+	// access RAM and SCREEN
+	RAM16K(in=in, load=setRam, address=address[0..13], out=ramOut);
+	Screen(in=in, load=setScreen, address=address[0..12], out=screenOut);
+	
+	// keyboard is read only!	
+	Keyboard(out=keyOut);
+
+	// select output RAM, SCREEN or KEYBOARD
+	Mux16(a=ramOut, b=screenOut, sel=isHigh, out=outTemp);
+	Mux16(a=outTemp, b=keyOut, sel=isKey, out=out);
+
 }

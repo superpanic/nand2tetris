@@ -54,6 +54,8 @@ CHIP CPU {
 
 		// DESTINATION CONTROL:
 
+		// see video 4.4 at 06:30 about destination bits
+
 
 		// A register:
 
@@ -71,19 +73,16 @@ CHIP CPU {
 		// bit 4
 		// "whenever there is a C-instruction 
 		// and d2 (bit 4) is a 1 the D register is loaded"
-		// also see destination bits in video 4.4 at 06:30
 		And(a=instruction[4], b=instruction[15], out=loadDRegisterFlag);
 		DRegister(in=ALUoutput, load=loadDRegisterFlag, out=ALUxInput);
+
 
 		// writeM:
 
 		// write to RAM[A]
 		// if a C-instruction (bit 15)
 		// and if bit 3 is set
-		// see video 4.4 at 06:30 about destination bits
 		And(a=instruction[3], b=instruction[15], out=writeM);
-
-
 
 
 
@@ -141,7 +140,7 @@ CHIP CPU {
 
 		// check for any jump condition:		
 		Or8Way(
-			in[0]=false, 
+			in[0]=false, // check for C-instruction here instead of later?
 			in[1]=JGT,
 			in[2]=JEQ,
 			in[3]=JGE,
