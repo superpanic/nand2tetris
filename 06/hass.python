@@ -1,0 +1,30 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""hass.python – a hack assembler"""
+
+def parseComp():
+	return comp
+
+def parseDest():
+	return dest
+
+def parseJump():
+	return jump
+
+def codeComp():
+	return compcode
+
+def codeDest():
+	return destcode
+
+def codeJump():
+	return destjump
+
+
+
+def main():
+	"""Launcher"""
+	print 'loading file'
+
+
+main()
