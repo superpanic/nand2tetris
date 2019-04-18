@@ -2,29 +2,84 @@
 # -*- coding: utf-8 -*-
 """hass.python – a hack assembler"""
 
+import sys
+import os
+import re
+
+def remove_comments(string):
+	pattern = r"(\".*?\"|\'.*?\')|(/\*.*?\*/|//[^\r\n]*$)"
+	# first group captures quoted strings (double or single)
+	# second group captures comments (//single-line or /* multi-line */)
+    	regex = re.compile(pattern, re.MULTILINE|re.DOTALL)
+	def _replacer(match):
+		# if the 2nd group (capturing comments) is not None,
+		# it means we have captured a non-quoted (real) comment string.
+		if match.group(2) is not None:
+			return "" # so we will return empty to remove the comment
+		else: # otherwise, we will return the 1st group
+			return match.group(1) # captured quoted-string
+		return regex.sub(_replacer, string)
+
+def removeComments(string):
+	string = re.sub(re.compile("/\*.*?\*/",re.DOTALL ) ,"" ,string) # remove all occurrences streamed comments (/*COMMENT */) from string
+	string = re.sub(re.compile("//.*?\n" ) ,"" ,string) # remove all occurrence single-line comments (//COMMENT\n ) from string
+	return string
+
 def parseComp():
+	comp=0
 	return comp
 
 def parseDest():
+	dest=0
 	return dest
 
 def parseJump():
+	jump=0
 	return jump
 
 def codeComp():
+	compcode=0
 	return compcode
 
 def codeDest():
+	destcode=0
 	return destcode
 
 def codeJump():
+	destjump=0
 	return destjump
-
-
 
 def main():
 	"""Launcher"""
-	print 'loading file'
+	
+	print 'trying to load file'
+
+	# check for filename
+	if(len(sys.argv)<2):
+		print 'usage: hass.python path/filename.ass'
+		sys.exit()
+
+	# open file
+	filename = sys.argv[1]
+	print 'open file:', filename
+		
+	if not os.path.isfile(filename):
+		print 'exiting program: file does not exist'
+		sys.exit()
+
+	f = open(filename, 'r')
+	#file exist, continue to read file
+
+	s1 = ''
+
+	for line in f:
+		line = removeComments(line)
+		if not line.strip(): continue
+		s1 = str(s1) + str(line)
 
 
+	print s1,
+
+	
+	
 main()
