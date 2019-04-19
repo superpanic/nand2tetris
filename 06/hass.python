@@ -6,80 +6,277 @@ import sys
 import os
 import re
 
-def remove_comments(string):
-	pattern = r"(\".*?\"|\'.*?\')|(/\*.*?\*/|//[^\r\n]*$)"
-	# first group captures quoted strings (double or single)
-	# second group captures comments (//single-line or /* multi-line */)
-    	regex = re.compile(pattern, re.MULTILINE|re.DOTALL)
-	def _replacer(match):
-		# if the 2nd group (capturing comments) is not None,
-		# it means we have captured a non-quoted (real) comment string.
-		if match.group(2) is not None:
-			return "" # so we will return empty to remove the comment
-		else: # otherwise, we will return the 1st group
-			return match.group(1) # captured quoted-string
-		return regex.sub(_replacer, string)
+symbols = {
+	'SP':0,
+	'LCL':1,
+	'ARG':2,
+	'THIS':3,
+	'THAT':4,
+	'R0':0,
+	'R1':1,
+	'R2':2,
+	'R3':3,
+	'R4':4,
+	'R5':5,
+	'R6':6,
+	'R7':7,
+	'R8':8,
+	'R9':9,
+	'R10':10,
+	'R11':11,
+	'R12':12,
+	'R13':13,
+	'R14':14,
+	'R15':15,
+	'SCREEN':16384,
+	'KBD':24576
+}
 
-def removeComments(string):
-	string = re.sub(re.compile("/\*.*?\*/",re.DOTALL ) ,"" ,string) # remove all occurrences streamed comments (/*COMMENT */) from string
-	string = re.sub(re.compile("//.*?\n" ) ,"" ,string) # remove all occurrence single-line comments (//COMMENT\n ) from string
+alu_commands = {
+	'null': '000000',
+	'0':   '101010',
+	'1':   '111111',
+	'-1':  '111010',
+	'D':   '001100',
+	'A':   '110000',
+	'!D':  '001101',
+	'!A':  '110001',
+	'-D':  '001111',
+	'-A':  '110011',
+	'D+1': '011111',
+	'A+1': '110111',
+	'D-1': '001110',
+	'A-1': '110010',
+	'D+A': '000010',
+	'D-A': '010011',
+	'A-D': '000111',
+	'D&A': '000000',
+	'D|A': '010101',
+	'M':   '110000',
+	'!M':  '110001',
+	'-M':  '110011',
+	'M+1': '110111',
+	'M-1': '110010',
+	'D+M': '000010',
+	'D-M': '010011',
+	'M-D': '000111',
+	'D&M': '000000',
+	'D|M': '010101'
+}
+
+dest_commands = {
+	'null': '000',
+	'M':    '001',
+	'D':    '010',
+	'MD':   '011',
+	'A':    '100',
+	'AM':   '101',
+	'AD':   '110',
+	'AMD':  '111'
+}
+
+jump_commands = {
+	'null':  '000',
+	'JGT':   '001',
+	'JEQ':   '010',
+	'JGE':   '011',
+	'JLT':   '100',
+	'JNE':   '101',
+	'JLE':   '110',
+	'JMP':   '111'
+}
+
+
+def remove_comments(string):
+	# strip comments using regex, and return string
+	# string = re.sub(re.compile("/\*.*?\*/",re.DOTALL ) ,"" ,string) # remove all occurrences streamed comments (/*COMMENT */) from string
+	string = re.sub(re.compile("//.*?\n" ) ,"\n" ,string) # remove all occurrence single-line comments (//COMMENT\n ) from string
 	return string
 
-def parseComp():
-	comp=0
-	return comp
+def parse_comp(s): 
+	# return a string looking like this: 'M+1'
+	comp = 'null'
+	if '=' in s: 
+		# it is a computation
+		comp = s.split('=')[1]
+	elif ';' in s: 
+		# it is a jump directive
+		comp = s.split(';')[0]
+	return comp.strip()
 
-def parseDest():
-	dest=0
-	return dest
+def parse_dest(s): 
+	# return string looking like this: 'D'
+	dest = 'null'
+	if '=' in s:
+		dest = s.split('=')[0]
+	return dest.strip()
 
-def parseJump():
-	jump=0
-	return jump
+def parse_jump(s): 
+	# return string looking like this: 'JGT'
+	jump='null'
+	if ';' in s:
+		jump = s.split(';')[1]
+	return jump.strip()
 
-def codeComp():
-	compcode=0
+def code_comp(s): 
+	# return a string looking like this: '1110111'
+	compcode=''
+	# does string contain an M?
+	if 'M' in s:
+		# a = 1
+		compcode = '1'
+	else:
+		# a = 0
+		compcode = '0'
+	compcode = compcode + alu_commands.get(s)
 	return compcode
 
-def codeDest():
-	destcode=0
+def code_dest(s): 
+	# return a string looking like this: '010'
+	destcode = '000'
+	if s in dest_commands:
+		destcode = dest_commands.get(s)
 	return destcode
 
-def codeJump():
-	destjump=0
-	return destjump
+def code_jump(s): 
+	# return a string looking like this: '001'
+	jumpcode='000'
+	if s in jump_commands:
+		jumpcode = jump_commands.get(s)
+	return jumpcode
+
+def dec_to_bin_str(s):
+	bin_str = "{0:016b}".format(s)
+	return bin_str
+
+def label_parser(s):
+	return_str = ''
+	line_counter = 0
+	for line in s.splitlines():
+		if '(' in line:
+			line = line.strip('()')
+			symbols[line] = line_counter
+			#print line + ':' + str(line_counter)
+		else:
+			return_str = return_str + line + '\n'
+			# only count lines without labels!
+			line_counter = line_counter + 1
+	return return_str
+		
+def symbol_parser(s):
+	return_str = ''
+	symbol_counter = 16
+	for line in s.splitlines():
+		# check for SYMBOL
+		if '@' in line:
+			# does symbol already exist?
+			symbol = line.strip('@ ')
+			if symbol.isdigit():
+				# no change needed, just add line without change
+				return_str = return_str + line + '\n'
+			elif not symbol in symbols:
+				# give new symbol a unique value and add to dictionary
+				symbols[symbol] = symbol_counter
+				return_str = return_str + '@' + str(symbol_counter) + '\n'
+				symbol_counter = symbol_counter + 1
+			else:
+				# replace symbol with value from dictionary
+				return_str = return_str + '@' + str(symbols.get(symbol)) + '\n'
+
+		# no symbol
+		else:
+			# line contains no symbol, just add line without change
+			return_str = return_str + line + '\n'
+	return return_str
+
+def final_parser(s):
+	parse_str = ''
+	command = ''
+	line_count = 0
+	for line in s.splitlines():
+		line_count = line_count+1
+		# check for empty string
+		if len(line) < 2:
+			print 'warning: parser string too short, returning 0'
+			return dec_to_bin_str(0)
+
+		# check for A-COMMAND:
+		if line[0] == '@':
+			val = line[1:]
+			if val.isdigit():
+				bin16_str = dec_to_bin_str(int(val))
+			else:
+				print 'warning: parser found an A-command with non integer value on line:', str(line_count), ', returning 0'
+				bin16_str = dec_to_bin_str(0)
+			# make sure left-most digit is 0
+			command = '0' + bin16_str[1:]
+
+		# it's a C-COMMAND:
+		else:
+			c = parse_comp(line)  # ==> M+1
+			d = parse_dest(line)  # ==> D
+			j = parse_jump(line)  # ==> JGT
+
+			c = code_comp(c)  # ==> 1110111
+			d = code_dest(d)  # ==> 001
+			j = code_jump(j)  # ==> 000
+
+			command = '111' + c + d + j
+
+		parse_str = parse_str + command + '\n'
+
+	return parse_str
 
 def main():
-	"""Launcher"""
 	
-	print 'trying to load file'
+	verbose = False
 
 	# check for filename
-	if(len(sys.argv)<2):
-		print 'usage: hass.python path/filename.ass'
+	if len(sys.argv) < 3 :
+		print 'usage: hass.python filename.ass output.hack'
 		sys.exit()
+
+	if len(sys.argv) > 3:
+		if sys.argv[3] == 'v':
+			verbose = True
 
 	# open file
 	filename = sys.argv[1]
-	print 'open file:', filename
+	if verbose: print 'open file:', filename
 		
 	if not os.path.isfile(filename):
 		print 'exiting program: file does not exist'
 		sys.exit()
 
 	f = open(filename, 'r')
-	#file exist, continue to read file
-
-	s1 = ''
+	
+	# clean string
+	clean_str = ''
 
 	for line in f:
-		line = removeComments(line)
-		if not line.strip(): continue
-		s1 = str(s1) + str(line)
+		line = remove_comments(line)
+		line = line.strip(' ')
+		if not line.strip(): 
+			continue
+		clean_str = str(clean_str) + str(line)
 
+	# close file
+	f.close()
 
-	print s1,
+	parser_output = label_parser(clean_str)
+	parser_output = symbol_parser(parser_output)
+	parser_output = final_parser(parser_output)
 
-	
+	if verbose: 
+		print 'machine code:\n' + parser_output
+		print symbols
+
+	out_filename = sys.argv[2]
+	if verbose: print 'writing file:', out_filename
+
+	output = open(out_filename, 'w')
+	output.write(parser_output)
+	output.close()
+
 	
 main()
